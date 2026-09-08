@@ -130,23 +130,29 @@ if (loginForm) {
         }
         
         try {
-            // Aquí irá tu llamada al backend
-            // const response = await fetch('/api/auth/login', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({ email, password, remember })
-            // });
-            
-            // SIMULACIÓN (eliminar en producción)
-            console.log('Login attempt:', { email, password, remember });
-            
+            const API = window.JUNIORSWIPE_API_URL || 'http://localhost:5000';
+            const response = await fetch(`${API}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                showToast(data?.error?.message || 'Credenciales incorrectas', 'error');
+                return;
+            }
+
+            localStorage.setItem('juniorswipe_token', data.token);
+            localStorage.setItem('juniorswipe_user', JSON.stringify(data.user));
+            if (remember) localStorage.setItem('juniorswipe_remember', '1');
+
             showToast('Iniciando sesión...', 'success');
-            
-            // Simular redirección después de login exitoso
+
             setTimeout(() => {
-                window.location.href = '../dashboard.html'; // Cambiar a tu ruta real
-            }, 1500);
-            
+                window.location.href = (window.JUNIORSWIPE_APP_URL || 'http://localhost:5173') + '#token=' + encodeURIComponent(data.token);
+            }, 1200);
+
         } catch (error) {
             console.error('Error:', error);
             showToast('Error al iniciar sesión. Intenta de nuevo.', 'error');
@@ -176,8 +182,10 @@ if (registerForm) {
         const password = formData.get('password');
         const confirmPassword = formData.get('confirmPassword');
         const userType = formData.get('userType');
-        const terms = formData.get('terms');
-        
+        // El checkbox de términos está deshabilitado en register.html; sólo se valida si existe.
+        const termsField = registerForm.querySelector('#terms');
+        const terms = termsField ? termsField.checked : true;
+
         // Validaciones
         if (!fullName || fullName.trim().length < 3) {
             showToast('Por favor ingresa tu nombre completo', 'error');
@@ -205,25 +213,29 @@ if (registerForm) {
         }
         
         try {
-            // Aquí irá tu llamada al backend
-            // const response = await fetch('/api/auth/register', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({ fullName, email, password, userType })
-            // });
-            
-            // SIMULACIÓN (eliminar en producción)
-            console.log('Register attempt:', { fullName, email, userType });
-            
+            const API = window.JUNIORSWIPE_API_URL || 'http://localhost:5000';
+            const role = userType === 'company' ? 'company' : 'developer';
+            const response = await fetch(`${API}/api/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_name: fullName, email, password, role })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                showToast(data?.error?.message || 'No se pudo crear la cuenta', 'error');
+                return;
+            }
+
+            localStorage.setItem('juniorswipe_token', data.token);
+            localStorage.setItem('juniorswipe_user', JSON.stringify(data.user));
+
             showToast('Cuenta creada exitosamente! Redirigiendo...', 'success');
-            
-            // Simular redirección
+
             setTimeout(() => {
-                window.location.href = userType === 'developer' 
-                    ? '../dashboard-developer.html' 
-                    : '../dashboard-company.html';
-            }, 1500);
-            
+                window.location.href = (window.JUNIORSWIPE_APP_URL || 'http://localhost:5173') + '#token=' + encodeURIComponent(data.token);
+            }, 1200);
+
         } catch (error) {
             console.error('Error:', error);
             showToast('Error al crear cuenta. Intenta de nuevo.', 'error');
