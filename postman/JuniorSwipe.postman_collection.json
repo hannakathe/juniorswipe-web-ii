@@ -1,0 +1,226 @@
+{
+  "info": {
+    "name": "JuniorSwipe API",
+    "_postman_id": "juniorswipe-local-collection",
+    "description": "Local JuniorSwipe REST API. Set {{baseUrl}} via the environment or collection variable. 'Login' stores {{token}} automatically; every protected request inherits Bearer auth from the collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "token", "value": "" },
+    { "key": "projectId", "value": "" },
+    { "key": "taskId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/health", "auth": { "type": "noauth" } },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('db ok', () => pm.expect(pm.response.json().database).to.be.true);"
+          ] } }]
+        },
+        {
+          "name": "Metrics",
+          "request": { "method": "GET", "url": "{{baseUrl}}/metrics", "auth": { "type": "noauth" } },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('exposes counter', () => pm.expect(pm.response.text()).to.include('http_requests_total'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "noauth" },
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"postman+{{$timestamp}}@local.test\",\n  \"password\": \"Password123!\",\n  \"full_name\": \"Postman User\",\n  \"role\": \"developer\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201', () => pm.response.to.have.status(201));",
+            "pm.test('returns token', () => pm.expect(pm.response.json().token).to.be.a('string'));"
+          ] } }]
+        },
+        {
+          "name": "Login (stores token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "noauth" },
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"dev@local.test\",\n  \"password\": \"Password123!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.token).to.be.a('string');",
+            "pm.collectionVariables.set('token', body.token);",
+            "pm.test('jwt has 3 parts', () => pm.expect(body.token.split('.')).to.have.lengthOf(3));"
+          ] } }]
+        },
+        {
+          "name": "Login wrong password (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "noauth" },
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"dev@local.test\",\n  \"password\": \"nope\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('401', () => pm.response.to.have.status(401));",
+            "pm.test('error code', () => pm.expect(pm.response.json().error.code).to.eql('invalid_credentials'));"
+          ] } }]
+        },
+        {
+          "name": "Me",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('email', () => pm.expect(pm.response.json().email).to.eql('dev@local.test'));"
+          ] } }]
+        },
+        {
+          "name": "Me without token (401)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me", "auth": { "type": "noauth" } },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('401', () => pm.response.to.have.status(401));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "Profile & CV",
+      "item": [
+        {
+          "name": "Get my profile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/profiles/me" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));"
+          ] } }]
+        },
+        {
+          "name": "Update my profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/profiles/me",
+            "body": { "mode": "raw", "raw": "{\n  \"headline\": \"Backend dev\",\n  \"skills\": [\"python\", \"sql\", \"flask\"]\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('skills saved', () => pm.expect(pm.response.json().skills).to.include('python'));"
+          ] } }]
+        },
+        {
+          "name": "Create resume (CV)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/resumes",
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"CV 2026\",\n  \"summary\": \"Junior full-stack\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201', () => pm.response.to.have.status(201));"
+          ] } }]
+        },
+        {
+          "name": "List resumes",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/resumes" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('has items', () => pm.expect(pm.response.json().items).to.be.an('array'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "Create project (stores projectId)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/projects",
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Postman project\",\n  \"description\": \"created from Postman\",\n  \"status\": \"open\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201', () => pm.response.to.have.status(201));",
+            "const p = pm.response.json();",
+            "pm.collectionVariables.set('projectId', p.id);",
+            "pm.test('owner set', () => pm.expect(p.owner_id).to.be.a('number'));"
+          ] } }]
+        },
+        {
+          "name": "List projects",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/projects?per_page=50" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('paginated', () => pm.expect(pm.response.json()).to.have.property('total'));"
+          ] } }]
+        },
+        {
+          "name": "Get project by id",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/projects/{{projectId}}" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('has tasks array', () => pm.expect(pm.response.json().tasks).to.be.an('array'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "Create task (stores taskId)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/tasks",
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Write Postman tests\",\n  \"project_id\": {{projectId}},\n  \"status\": \"todo\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('taskId', pm.response.json().id);"
+          ] } }]
+        },
+        {
+          "name": "List tasks",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/tasks?project_id={{projectId}}" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('contains created task', () => pm.expect(pm.response.text()).to.include('Write Postman tests'));"
+          ] } }]
+        },
+        {
+          "name": "Update task -> done",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}",
+            "body": { "mode": "raw", "raw": "{ \"status\": \"done\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('status done', () => pm.expect(pm.response.json().status).to.eql('done'));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}

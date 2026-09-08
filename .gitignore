@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Local backend artifacts
+backend/*.db
+backend/storage/
+backend/storage_test/
+backend/instance/
+
+# Env files (never commit real secrets)
+.env
+.env.local
+*.env
+!*.env.example
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+
+# Terraform
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+terraform/.terraform.lock.hcl
+
+# Docker / monitoring volumes
+monitoring/grafana/data/
+pgdata/

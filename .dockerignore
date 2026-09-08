@@ -1,0 +1,13 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.db
+backend/storage
+backend/storage_test
+frontend/dist
+frontend/.vite
+.git
+*.md
+!README.md
+terraform/.terraform
+monitoring/grafana/data

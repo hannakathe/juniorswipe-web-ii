@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: juniorswipe-config
+  namespace: juniorswipe
+data:
+  JWT_EXPIRES_SECONDS: "3600"
+  SEED_ON_STARTUP: "true"
+  STORAGE_DIR: "/app/storage"
+  CORS_ORIGINS: "http://localhost,http://localhost:8080,http://juniorswipe.local"
+  POSTGRES_DB: juniorswipe
+  POSTGRES_USER: juniorswipe
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: juniorswipe-secret
+  namespace: juniorswipe
+type: Opaque
+stringData:
+  # DEMO ONLY — replace with a real secret manager in production.
+  SECRET_KEY: "k8s-dev-secret-change-me"
+  JWT_SECRET: "k8s-dev-jwt-secret-change-me"
+  POSTGRES_PASSWORD: "juniorswipe"
+  DATABASE_URL: "postgresql://juniorswipe:juniorswipe@db:5432/juniorswipe"

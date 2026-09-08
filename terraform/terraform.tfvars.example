@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars and adjust. Never commit real secrets.
+
+# Linux / macOS:
+# docker_host = "unix:///var/run/docker.sock"
+# Windows:
+docker_host = "npipe:////./pipe/docker_engine"
+
+backend_port     = 5000
+frontend_port    = 8080
+postgres_password = "juniorswipe"
+jwt_secret        = "change-me"
+seed_on_startup   = true

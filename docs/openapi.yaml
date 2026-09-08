@@ -1,0 +1,488 @@
+openapi: 3.0.3
+info:
+  title: JuniorSwipe API
+  version: 1.0.0
+  description: >
+    Local REST API for JuniorSwipe. JWT bearer auth. Every project/task/resume/profile
+    resource is owned by exactly one user; cross-user access returns 404.
+servers:
+  - url: http://localhost:5000
+    description: Local backend (direct)
+  - url: http://localhost:5173
+    description: Local frontend (nginx proxies /api to the backend)
+
+tags:
+  - name: auth
+  - name: users
+  - name: profiles
+  - name: resumes
+  - name: projects
+  - name: tasks
+  - name: system
+
+paths:
+  /api/health:
+    get:
+      tags: [system]
+      summary: Liveness + DB check
+      security: []
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } } }
+        '503': { description: Database unreachable }
+
+  /metrics:
+    get:
+      tags: [system]
+      summary: Prometheus metrics (text exposition format)
+      security: []
+      responses:
+        '200': { description: OK, content: { text/plain: { schema: { type: string } } } }
+
+  /api/auth/register:
+    post:
+      tags: [auth]
+      security: []
+      summary: Register a new user and receive a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterInput' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/AuthResult' } } } }
+        '409': { description: Email already registered, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Exchange credentials for a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AuthResult' } } } }
+        '401': { description: Invalid credentials, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Current user + profile
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UserWithProfile' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/users/me:
+    get:
+      tags: [users]
+      summary: Aggregate view of the authenticated user (counts)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UserAggregate' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/profiles/me:
+    get:
+      tags: [profiles]
+      summary: Get my profile
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [profiles]
+      summary: Update my profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileInput' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/resumes:
+    get:
+      tags: [resumes]
+      summary: List my resumes (CV)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ResumeList' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [resumes]
+      summary: Create a resume (developer role only). JSON or multipart with `file`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResumeInput' }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                summary: { type: string }
+                file: { type: string, format: binary }
+              required: [title]
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Resume' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '415': { description: Unsupported file type, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/resumes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [resumes]
+      summary: Get one of my resumes
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Resume' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [resumes]
+      summary: Update resume metadata
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResumeInput' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Resume' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [resumes]
+      summary: Delete a resume
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/resumes/{id}/file:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [resumes]
+      summary: Download the attached CV file
+      responses:
+        '200': { description: Binary file, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/projects:
+    get:
+      tags: [projects]
+      summary: List my projects (paginated)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, open, active, closed] } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProjectInput' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/projects/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [projects]
+      summary: Get a project (with its tasks)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectWithTasks' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [projects]
+      summary: Update a project
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProjectInput' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [projects]
+      summary: Delete a project
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/projects/{id}/tasks:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [tasks]
+      summary: List tasks of a project
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaskList' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [tasks]
+      summary: Create a task under a project
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TaskInput' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/tasks:
+    get:
+      tags: [tasks]
+      summary: List tasks across all my projects (paginated)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 20 } }
+        - { name: project_id, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string, enum: [todo, in_progress, done] } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TaskPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [tasks]
+      summary: Create a task (project_id in body)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TaskCreate' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/tasks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [tasks]
+      summary: Get a task
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [tasks]
+      summary: Update a task
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/TaskInput' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [tasks]
+      summary: Delete a task
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  security:
+    - bearerAuth: []
+  responses:
+    Unauthorized:
+      description: Missing / invalid / expired token
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Authenticated but role not allowed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Not found or not owned by caller
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: token_expired }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+    Health:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+        database: { type: boolean }
+    RegisterInput:
+      type: object
+      required: [email, password, full_name]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        full_name: { type: string }
+        role: { type: string, enum: [developer, company], default: developer }
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    AuthResult:
+      type: object
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/User' }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        full_name: { type: string }
+        role: { type: string, enum: [developer, company] }
+        created_at: { type: string, format: date-time }
+    UserWithProfile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            profile: { $ref: '#/components/schemas/Profile' }
+    UserAggregate:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            profile: { $ref: '#/components/schemas/Profile' }
+            resume_count: { type: integer }
+            project_count: { type: integer }
+    Profile:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        headline: { type: string, nullable: true }
+        bio: { type: string, nullable: true }
+        location: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        company_name: { type: string, nullable: true }
+        skills: { type: array, items: { type: string } }
+        updated_at: { type: string, format: date-time }
+    ProfileInput:
+      type: object
+      properties:
+        headline: { type: string }
+        bio: { type: string }
+        location: { type: string }
+        website: { type: string }
+        company_name: { type: string }
+        skills: { type: array, items: { type: string } }
+    Resume:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        title: { type: string }
+        summary: { type: string, nullable: true }
+        original_filename: { type: string, nullable: true }
+        content_type: { type: string, nullable: true }
+        size_bytes: { type: integer }
+        is_primary: { type: boolean }
+        has_file: { type: boolean }
+        download_url: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    ResumeInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        summary: { type: string }
+        is_primary: { type: boolean }
+    ResumeList:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Resume' } }
+        total: { type: integer }
+    Project:
+      type: object
+      properties:
+        id: { type: integer }
+        owner_id: { type: integer }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [draft, open, active, closed] }
+        tech_stack: { type: string, nullable: true }
+        task_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProjectInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [draft, open, active, closed] }
+        tech_stack: { type: string }
+    ProjectWithTasks:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            tasks: { type: array, items: { $ref: '#/components/schemas/Task' } }
+    ProjectPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Project' } }
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    Task:
+      type: object
+      properties:
+        id: { type: integer }
+        project_id: { type: integer }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [todo, in_progress, done] }
+        priority: { type: string, example: medium }
+        due_date: { type: string, format: date, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TaskInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [todo, in_progress, done] }
+        priority: { type: string }
+        due_date: { type: string, format: date }
+    TaskCreate:
+      allOf:
+        - $ref: '#/components/schemas/TaskInput'
+        - type: object
+          required: [title, project_id]
+          properties:
+            project_id: { type: integer }
+    TaskList:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Task' } }
+        total: { type: integer }
+    TaskPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Task' } }
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+
+security:
+  - bearerAuth: []
