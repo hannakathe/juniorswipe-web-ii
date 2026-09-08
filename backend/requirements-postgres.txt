@@ -1,0 +1,4 @@
+# PostgreSQL driver — used by Docker / Kubernetes images (Python 3.12 base).
+# Local development and the test suite default to SQLite and do not need this.
+-r requirements.txt
+psycopg[binary]==3.2.3
