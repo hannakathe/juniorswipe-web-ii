@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: juniorswipe
+  labels: { app: backend }
+spec:
+  replicas: 1   # bump once STORAGE_DIR is on a ReadWriteMany volume
+  selector:
+    matchLabels: { app: backend }
+  template:
+    metadata:
+      labels: { app: backend }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h db -U juniorswipe; do echo waiting for db; sleep 2; done"]
+      containers:
+        - name: backend
+          image: juniorswipe-backend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef: { name: juniorswipe-config }
+            - secretRef: { name: juniorswipe-secret }
+          readinessProbe:
+            httpGet: { path: /api/health, port: 5000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /api/health, port: 5000 }
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - name: storage
+              mountPath: /app/storage
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: backend-storage
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-storage
+  namespace: juniorswipe
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: juniorswipe
+spec:
+  selector: { app: backend }
+  ports:
+    - port: 5000
+      targetPort: 5000
