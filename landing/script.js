@@ -42,7 +42,7 @@ const observer = new IntersectionObserver((entries) => {
 }, observerOptions);
 
 // observamos los elementos para animar
-document.querySelectorAll('.feature-card, .step, .mockup-item, .team-member, .mv-card').forEach(element => {
+document.querySelectorAll('.feature-card, .step, .mockup-item, .mv-card').forEach(element => {
     observer.observe(element);
 });
 
