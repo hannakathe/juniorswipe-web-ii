@@ -5,7 +5,11 @@
  * - normalises the `{ error: { code, message } }` envelope
  * - emits `juniorswipe:unauthorized` on 401 so the app can log out
  */
-const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+// When VITE_API_URL is undefined -> local dev default.
+// When it is set to "" (or "/") -> use same-origin relative requests (Docker/nginx proxy).
+const RAW_BASE = import.meta.env.VITE_API_URL;
+const BASE_URL = (RAW_BASE === undefined ? 'http://localhost:5000' : RAW_BASE)
+  .replace(/\/$/, '');
 
 const TOKEN_KEY = 'juniorswipe_token';
 const USER_KEY = 'juniorswipe_user';
@@ -55,8 +59,9 @@ async function request(method, path, { body, auth = true, raw = false } = {}) {
   let res;
   try {
     res = await fetch(`${BASE_URL}${path}`, opts);
-  } catch (netErr) {
-    throw new ApiError(`No se pudo conectar con la API (${BASE_URL})`, 0, 'network_error');
+  } catch {
+    throw new ApiError(`No se pudo conectar con la API (${BASE_URL || 'same-origin'})`,
+      0, 'network_error');
   }
 
   if (res.status === 401) {
